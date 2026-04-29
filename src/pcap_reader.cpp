@@ -72,8 +72,7 @@ bool PcapReader::readNextPacket(RawPacket& packet) {
     
     // Read the packet header (16 bytes)
     file_.read(reinterpret_cast<char*>(&packet.header), sizeof(PcapPacketHeader));
-    if (!file_.good()) {
-        // End of file or error
+    if (file_.gcount() != static_cast<std::streamsize>(sizeof(PcapPacketHeader))) {
         return false;
     }
     
@@ -95,7 +94,7 @@ bool PcapReader::readNextPacket(RawPacket& packet) {
     // Read the packet data
     packet.data.resize(packet.header.incl_len);
     file_.read(reinterpret_cast<char*>(packet.data.data()), packet.header.incl_len);
-    if (!file_.good()) {
+    if (file_.gcount() != static_cast<std::streamsize>(packet.header.incl_len)) {
         std::cerr << "Error: Could not read packet data" << std::endl;
         return false;
     }

@@ -150,7 +150,7 @@ int main(int argc, char* argv[]) {
     ParsedPacket parsed;
     
     std::cout << "[DPI] Processing packets...\n";
-    
+
     while (reader.readNextPacket(raw)) {
         total_packets++;
         
