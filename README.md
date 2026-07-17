@@ -8,6 +8,35 @@ Forked and extended from [perryvegehan/Packet_analyzer](https://github.com/perry
 ## My Extensions
 - **JSON stats export** — writes structured stats.json after each run for pipeline integration and downstream analysis
 - **Top domains report** — surfaces the top 5 most-frequent SNI domains in a clean ASCII table
+- **pcap-reader EOF fix** — corrected end-of-capture detection (checking `gcount()` for a full record instead of the stream's `good()` bit), which mis-handled the final partial read
+- **Reproducible throughput benchmark** (`bench/`) — generates a large multi-flow capture and times the single- vs multi-threaded engines (see below)
+
+## Benchmark & performance analysis
+
+```bash
+python bench/gen_large_pcap.py --flows 250000 --out bench/large.pcap   # 1,000,000 packets, ~87 MB
+# build both engines with -static so they launch standalone (see Build Commands), then:
+python bench/benchmark.py
+```
+
+Measured on 1,000,000 packets / 250,000 flows (best of 3, MinGW g++ 15, `-O2`):
+
+| Engine | Throughput | vs single-threaded |
+|---|---|---|
+| **single-threaded** (`dpi_simple`) | **~486,000 pkt/s** | baseline |
+| multi-threaded, 4 workers | ~238,000 pkt/s | 0.49x |
+| multi-threaded, 8 workers | ~223,000 pkt/s | 0.46x |
+| multi-threaded, 16 workers | ~173,000 pkt/s | 0.36x |
+
+**Honest finding:** on file replay the multi-threaded pipeline is *not* faster —
+it's slower, and gets slower as workers increase. The workload is dominated by
+sequential pcap reading + per-packet parsing (I/O bound), so the reader is the
+bottleneck and the extra thread coordination (queue hand-offs, batching, the
+pipeline's drain step) is pure overhead — a textbook Amdahl's-law limit. This
+thread-per-flow design pays off when the *per-packet* work is heavier (regex /
+signature matching) or when packets arrive concurrently from a live NIC, not
+when one file is replayed as fast as a single parser can read it. Documenting
+this trade-off honestly is the point of the benchmark.
 
 ## What I Studied
 - Multi-threaded packet processing with load-balancer + fast-path threads using consistent hashing on the 5-tuple
